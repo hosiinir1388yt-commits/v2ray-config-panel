@@ -1,0 +1,23 @@
+*{box-sizing:border-box}
+body{margin:0;background:#07111f;color:#e8eef8;font-family:Tahoma,Arial,sans-serif;min-height:100vh}
+#lock{min-height:100vh;display:grid;place-items:center;padding:20px}
+.card{background:#0e1b2d;border:1px solid #263b56;border-radius:18px;padding:20px;box-shadow:0 15px 45px #0004}
+.login{width:min(420px,100%);text-align:center}
+.login p,header p,footer{color:#94a3b8}
+.login b{display:block;color:#fb7185;margin-top:8px;min-height:20px}
+.login input{margin:12px 0}
+main{max-width:1100px;margin:auto;padding:25px 18px}
+header{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+h1{margin:0 0 7px}h2{font-size:18px}
+label{display:block;color:#b9c6d8;font-size:13px;margin:12px 0}
+input,select,textarea{display:block;width:100%;margin-top:7px;background:#091525;border:1px solid #2c425e;border-radius:10px;color:#eef6ff;padding:11px;font:inherit}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+textarea{height:430px;direction:ltr;text-align:left;font-family:monospace;font-size:12px}
+.check{display:flex;align-items:center;gap:8px}.check input{width:auto;margin:0}
+button{background:#3b82f6;color:#fff;border:0;border-radius:10px;padding:11px 16px;font:inherit;font-weight:700;cursor:pointer}
+.secondary{background:#17263a;border:1px solid #2c425e}
+.actions{display:flex;gap:8px;margin-top:10px}.actions button{flex:1}
+#status{color:#7dd3fc;min-height:20px}
+footer{font-size:12px;margin-top:18px}
+@media(max-width:780px){.grid{grid-template-columns:1fr}.two{grid-template-columns:1fr}}
