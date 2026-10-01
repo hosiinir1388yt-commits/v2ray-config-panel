@@ -1,48 +1,36 @@
 const PASS_HASH="6f12879e3d9e2ba887598d781e61125fdd02aab66f6fb136a86d9221cec47222";
-async function hash(s){
- const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));
- return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
-}
-async function login(){
- if(await hash(document.getElementById("pw").value)===PASS_HASH){
-  sessionStorage.ok="1";
-  document.getElementById("lock").hidden=true;
-  document.getElementById("app").hidden=false;
- }else document.getElementById("err").textContent="رمز اشتباه است";
-}
-if(sessionStorage.ok==="1"){
- document.getElementById("lock").hidden=true;
- document.getElementById("app").hidden=false;
-}
-function generate(){
- let p=document.getElementById("protocol").value;
- let a=document.getElementById("address").value.trim();
- let portN=+document.getElementById("port").value||443;
- let idv=document.getElementById("id").value.trim();
- let network=document.getElementById("transport").value;
- let tlsv=document.getElementById("tls").checked;
- let pathv=document.getElementById("path").value.trim();
- if(!a||!idv){document.getElementById("status").textContent="آدرس و UUID/Password را وارد کنید.";return}
- let o;
- if(p==="VLESS")o={protocol:"vless",settings:{vnext:[{address:a,port:portN,users:[{id:idv,encryption:"none"}]}]},streamSettings:{network,security:tlsv?"tls":"none"}};
- if(p==="VMess")o={protocol:"vmess",settings:{vnext:[{address:a,port:portN,users:[{id:idv,alterId:0,security:"auto"}]}]},streamSettings:{network,security:tlsv?"tls":"none"}};
- if(p==="Trojan")o={protocol:"trojan",settings:{servers:[{address:a,port:portN,password:idv}]},streamSettings:{network,security:tlsv?"tls":"none"}};
- if(p==="Shadowsocks")o={protocol:"shadowsocks",settings:{servers:[{address:a,port:portN,method:"aes-128-gcm",password:idv}]}};
- if(network==="ws")o.streamSettings.wsSettings={path:pathv||"/"};
- if(network==="grpc")o.streamSettings.grpcSettings={serviceName:pathv||"grpc"};
- document.getElementById("out").value=JSON.stringify({
-  log:{loglevel:"warning"},
-  inbounds:[{listen:"127.0.0.1",port:10808,protocol:"socks",settings:{udp:true}}],
-  outbounds:[o]
- },null,2);
- document.getElementById("status").textContent="کانفیگ ساخته شد.";
-}
-async function copyOut(){
- await navigator.clipboard.writeText(document.getElementById("out").value);
- document.getElementById("status").textContent="کپی شد.";
-}
-function downloadOut(){
- let b=new Blob([document.getElementById("out").value],{type:"application/json"});
- let a=document.createElement("a");
- a.href=URL.createObjectURL(b);a.download="config.json";a.click();
-}
+const CK="v2rayPanelConfigs",UK="v2rayPanelUsers", $=id=>document.getElementById(id);
+async function hash(s){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+async function login(){const x=$("pw");if(await hash(x.value)===PASS_HASH){sessionStorage.ok="1";location.href="dashboard.html"}else{$("err").textContent="رمز اشتباه است";x.value="";x.focus()}}
+function logout(){sessionStorage.removeItem("ok");location.href="index.html"}
+const uid=()=>crypto.randomUUID?crypto.randomUUID():"id-"+Date.now()+"-"+Math.random().toString(36).slice(2);
+const get=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k))||d}catch{return d}};
+const put=(k,v)=>localStorage.setItem(k,JSON.stringify(v)), configs=()=>get(CK,[]), users=()=>get(UK,[{id:"default",name:"کاربر اصلی"}]);
+function init(){if(!location.pathname.endsWith("dashboard.html")){if(sessionStorage.ok==="1"&&location.pathname.endsWith("index.html"))location.href="dashboard.html";return}if(sessionStorage.ok!=="1"){location.href="index.html";return}if(!localStorage.getItem(UK))put(UK,users());if($("servers")&&!$("servers").children.length)addServer();renderAll()}
+function showView(v){["dashboardView","builderView","usersView","importView"].forEach(x=>$(x)?.classList.add("hidden"));$(v==="dashboard"?"dashboardView":v==="builder"?"builderView":v==="users"?"usersView":"importView")?.classList.remove("hidden");if(v==="builder")fillUsers();if(v==="users")renderUsers();if(v==="dashboard")renderAll();scrollTo({top:0,behavior:"smooth"})}
+function addServer(d={host:"",port:443}){const w=document.createElement("div");w.className="server-row";w.innerHTML='<input class="server-host" placeholder="IP یا دامنه"><input class="server-port" type="number" min="1" max="65535" value="'+(d.port||443)+'"><button class="danger small">حذف</button>';w.querySelector(".server-host").value=d.host||"";w.querySelector("button").onclick=()=>w.remove();$("servers").appendChild(w)}
+function fillUsers(sel){if(!$("cfgUser"))return;let us=users();$("cfgUser").innerHTML=us.map(u=>`<option value="${esc(u.id)}">${esc(u.name)}</option>`).join("");if(sel)$("cfgUser").value=sel}
+function addUser(){let n=prompt("نام کاربر:");if(!n?.trim())return;let u=users();u.push({id:uid(),name:n.trim()});put(UK,u);renderAll();fillUsers();toast("کاربر اضافه شد")}
+function delUser(id){if(id==="default"){toast("کاربر اصلی حذف نمی‌شود");return}if(configs().some(c=>c.userId===id)){toast("این کاربر هنوز کانفیگ دارد");return}put(UK,users().filter(x=>x.id!==id));renderAll()}
+function renderUsers(){let cs=configs();$("userRows").innerHTML=users().map(u=>`<tr><td>${esc(u.name)}</td><td>${cs.filter(c=>c.userId===u.id).length}</td><td><button class="danger small" onclick="delUser('${u.id}')">حذف</button></td></tr>`).join("")}
+function buildConfig(){let name=$("cfgName").value.trim()||"کانفیگ جدید",protocol=$("protocol").value,limit=+($("limitGB").value||0),days=+($("durationPreset").value||0),servers=[...document.querySelectorAll(".server-row")].map(r=>({host:r.querySelector(".server-host").value.trim(),port:+r.querySelector(".server-port").value||443})).filter(x=>x.host);if(!servers.length){toast("حداقل یک IP یا دامنه وارد کنید");return}let c={id:uid(),name,protocol,servers,credential:$("credential").value.trim()||uid(),transport:$("transport").value,path:$("path").value.trim()||"/",host:$("host").value.trim(),tls:$("tls").checked,userId:$("cfgUser").value||"default",limitGB:limit,usedGB:0,createdAt:new Date().toISOString(),expiresAt:days?new Date(Date.now()+days*864e5).toISOString():null};let a=configs();a.unshift(c);put(CK,a);showGenerated(c);renderAll();toast("کانفیگ ساخته و ذخیره شد")}
+function share(c,s){let q=new URLSearchParams();if(c.transport!=="tcp")q.set("type",c.transport);if(c.tls){q.set("security","tls");if(c.host)q.set("sni",c.host)}if(c.transport==="ws")q.set("path",c.path);if(c.transport==="grpc")q.set("serviceName",c.path);if(c.host&&!c.tls)q.set("host",c.host);let tail=(q.toString()?"?"+q:"")+"#"+encodeURIComponent(c.name);if(c.protocol==="VLESS")return`vless://${encodeURIComponent(c.credential)}@${s.host}:${s.port}${tail}`;if(c.protocol==="Trojan")return`trojan://${encodeURIComponent(c.credential)}@${s.host}:${s.port}${tail}`;if(c.protocol==="Shadowsocks"){let x=btoa(unescape(encodeURIComponent("aes-128-gcm:"+c.credential))).replace(/=+$/,"");return`ss://${x}@${s.host}:${s.port}${tail}`}let j={v:"2",ps:c.name,add:s.host,port:String(s.port),id:c.credential,aid:"0",scy:"auto",net:c.transport,type:"none",host:c.host||"",path:c.path,tls:c.tls?"tls":"",sni:c.host||""};return"vmess://"+btoa(unescape(encodeURIComponent(JSON.stringify(j))))}
+function clientJSON(c){let ss={network:c.transport,security:c.tls?"tls":"none"};if(c.transport==="ws")ss.wsSettings={path:c.path,headers:c.host?{Host:c.host}:{}};if(c.transport==="grpc")ss.grpcSettings={serviceName:c.path||"grpc"};let out=c.servers.map(s=>{if(c.protocol==="VLESS")return{protocol:"vless",settings:{vnext:[{address:s.host,port:s.port,users:[{id:c.credential,encryption:"none"}]}]},streamSettings:ss};if(c.protocol==="VMess")return{protocol:"vmess",settings:{vnext:[{address:s.host,port:s.port,users:[{id:c.credential,alterId:0,security:"auto"}]}]},streamSettings:ss};if(c.protocol==="Trojan")return{protocol:"trojan",settings:{servers:[{address:s.host,port:s.port,password:c.credential}]},streamSettings:ss};return{protocol:"shadowsocks",settings:{servers:[{address:s.host,port:s.port,method:"aes-128-gcm",password:c.credential}]}}});return{log:{loglevel:"warning"},inbounds:[{listen:"127.0.0.1",port:10808,protocol:"socks",settings:{udp:true}}],outbounds:out}}
+function showGenerated(c){$("shareLink").value=share(c,c.servers[0]);$("jsonOut").value=JSON.stringify(clientJSON(c),null,2);$("qr").innerHTML="";if(window.QRCode)new QRCode($("qr"),{text:$("shareLink").value,width:210,height:210,correctLevel:QRCode.CorrectLevel.M})}
+function renderAll(){renderStats();renderConfigs();renderUsers();fillUsers()}
+function status(c){if(c.expiresAt&&new Date(c.expiresAt)<new Date())return"منقضی";if(c.limitGB>0&&c.usedGB>=c.limitGB)return"حجم تمام";return"فعال"}
+function renderStats(){let c=configs();$("statConfigs").textContent=c.length;$("statUsers").textContent=users().length;$("statUsed").textContent=gb(c.reduce((n,x)=>n+(+x.usedGB||0),0));$("statActive").textContent=c.filter(x=>status(x)==="فعال").length}
+function renderConfigs(){if(!$("configRows"))return;let q=($("search")?.value||"").toLowerCase(),a=configs().filter(c=>!q||[c.name,c.protocol,...c.servers.map(s=>s.host)].join(" ").toLowerCase().includes(q));$("configRows").innerHTML=a.map(c=>{let s=c.servers[0]||{},st=status(c);return`<tr><td><b>${esc(c.name)}</b><small>${esc(users().find(u=>u.id===c.userId)?.name||"کاربر اصلی")}</small></td><td>${c.protocol}</td><td>${esc(s.host||"-")}${c.servers.length>1?` <span class="badge">+${c.servers.length-1}</span>`:""}</td><td>${s.port||"-"}</td><td>${date(c.expiresAt)}</td><td>${gb(c.usedGB)} / ${c.limitGB?gb(c.limitGB):"∞"}</td><td><span class="status-pill ${st==="فعال"?"ok":st==="منقضی"?"bad":"warn"}">${st}</span></td><td class="ops"><button class="small" onclick="showConfig('${c.id}')">لینک</button><button class="secondary small" onclick="usage('${c.id}')">مصرف</button><button class="danger small" onclick="delConfig('${c.id}')">حذف</button></td></tr>`}).join("");$("emptyConfigs").style.display=a.length?"none":"block"}
+function showConfig(id){let c=configs().find(x=>x.id===id);if(!c)return;showView("builder");$("cfgName").value=c.name;$("protocol").value=c.protocol;$("limitGB").value=c.limitGB;$("credential").value=c.credential;$("transport").value=c.transport;$("path").value=c.path;$("host").value=c.host;$("tls").checked=c.tls;fillUsers(c.userId);$("servers").innerHTML="";c.servers.forEach(addServer);showGenerated(c)}
+function usage(id){let c=configs().find(x=>x.id===id),v=prompt("مصرف‌شده (GB):",c.usedGB||0);if(v===null)return;c.usedGB=Math.max(0,+v||0);put(CK,configs().map(x=>x.id===id?c:x));renderAll();toast("حجم مصرفی بروزرسانی شد")}
+function delConfig(id){if(confirm("این کانفیگ حذف شود؟")){put(CK,configs().filter(c=>c.id!==id));renderAll();toast("حذف شد")}}
+function openImport(){$("importLink").value="";showView("import")}
+function importLink(){try{let c=parseLink($("importLink").value.trim());let a=configs();a.unshift(c);put(CK,a);renderAll();toast("کانفیگ وارد شد");showView("dashboard")}catch(e){$("importStatus").textContent="لینک معتبر یا پشتیبانی‌شده نیست."}}
+function parseLink(raw){let u=new URL(raw),p=u.protocol.slice(0,-1).toLowerCase(),name=decodeURIComponent(u.hash.slice(1)||"کانفیگ واردشده"),q=u.searchParams,transport=q.get("type")||"tcp",tls=q.get("security")==="tls",path=q.get("path")||q.get("serviceName")||"/",host=q.get("sni")||q.get("host")||"",cred,proto;if(p==="vless"){cred=decodeURIComponent(u.username);proto="VLESS"}else if(p==="trojan"){cred=decodeURIComponent(u.username);proto="Trojan"}else if(p==="ss"){cred=decodeURIComponent(escape(atob(u.username))).split(":").slice(1).join(":");proto="Shadowsocks"}else if(p==="vmess"){let j=JSON.parse(decodeURIComponent(escape(atob(raw.split("://")[1]))));cred=j.id;proto="VMess"}else throw 0;if(!cred||!u.hostname)throw 0;return{id:uid(),name,protocol:proto,servers:[{host:u.hostname,port:+u.port||443}],credential:cred,transport,path,host,tls,userId:"default",limitGB:0,usedGB:0,createdAt:new Date().toISOString(),expiresAt:null}}
+function copyLink(){navigator.clipboard.writeText($("shareLink").value).then(()=>toast("لینک کپی شد"))}
+function downloadLink(){blob($("shareLink").value,"v2ray-link.txt","text/plain")}
+function exportData(){blob(JSON.stringify({users:users(),configs:configs()},null,2),"v2ray-panel-backup.json","application/json")}
+function importData(e){let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(Array.isArray(d.users))put(UK,d.users);if(Array.isArray(d.configs))put(CK,d.configs);renderAll();toast("بازیابی شد")}catch{toast("فایل معتبر نیست")}};r.readAsText(f)}
+function blob(x,n,t){let a=document.createElement("a");a.href=URL.createObjectURL(new Blob([x],{type:t}));a.download=n;a.click()}
+function gb(n){return(Math.round((+n||0)*10)/10)+" GB"}function date(v){return v?new Intl.DateTimeFormat("fa-IR",{dateStyle:"short"}).format(new Date(v)):"بدون انقضا"}function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}function toast(s){let t=$("toast");if(!t)return;t.textContent=s;t.classList.add("show");clearTimeout(window.tt);window.tt=setTimeout(()=>t.classList.remove("show"),2200)}
+init();
